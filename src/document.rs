@@ -3742,6 +3742,21 @@ impl PdfDocument {
     /// order, so the tree is rejected and callers fall back to geometric order.
     ///
     /// Shares `structure_tree_cache`, so this costs a single cached parse.
+    /// Vendored addition (Otzaria): disable structure-tree processing for
+    /// this document by seeding the structure caches with "untagged".
+    ///
+    /// Every extraction surface consults these caches before parsing, so
+    /// after this call the document is treated as untagged and text
+    /// assembly always takes the geometric path. Used by the Otzaria
+    /// indexer for scanned-OCR corpora, where producer structure tags are
+    /// never a reliable reading-order signal and malformed structure
+    /// trees have caused runaway allocations (Bava Kamma scan: 16 GiB
+    /// alloc abort inside the structure-tree parse).
+    pub fn ignore_structure_tree(&self) {
+        *self.structure_tree_cache.lock_or_recover() = Some(None);
+        *self.actualtext_index_cache.lock_or_recover() = Some(None);
+    }
+
     pub(crate) fn struct_tree_trustworthy(&self) -> Option<Arc<crate::structure::StructTreeRoot>> {
         let mark = self.mark_info().unwrap_or_default();
         // Suspect documents: geometric reading order is spec-correct
